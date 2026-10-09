@@ -1,0 +1,99 @@
+name: Build and publish runtime-base image
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "Dockerfile"
+      - "scripts/**"
+      - ".github/workflows/image.yml"
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      install_metasploit:
+        description: "Also install the Metasploit Framework"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: runtime-base-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          # The image is large; the default runner disk is not enough.
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache \
+            /usr/local/share/boost \
+            /usr/lib/google-cloud-sdk \
+            "${AGENT_TOOLSDIRECTORY:-}" || true
+          sudo apt-get clean
+          df -h /
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            INSTALL_METASPLOIT=${{ github.event.inputs.install_metasploit || 'false' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          tag="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | head -n1)"
+          ./scripts/smoke-test.sh "$tag"
+
+      - name: Test Docker-in-Docker
+        run: |
+          set -euo pipefail
+          tag="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | head -n1)"
+          docker run --rm --privileged -v /var/lib/docker "$tag" \
+            bash -lc 'docker info >/dev/null && docker run --rm hello-world'
