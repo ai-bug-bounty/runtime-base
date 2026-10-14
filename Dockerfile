@@ -140,7 +140,7 @@ RUN chmod +x /usr/local/bin/install-pipx-tools.sh \
 # proxied through mitmproxy without TLS errors.
 COPY scripts/install-mitmproxy-ca.sh /usr/local/bin/install-mitmproxy-ca.sh
 RUN chmod +x /usr/local/bin/install-mitmproxy-ca.sh \
- && su - ubuntu -c 'install-mitmproxy-ca.sh'
+ && /usr/local/bin/install-mitmproxy-ca.sh
 
 # ---------------------------------------------------------------------------
 # 6. Go-based recon/web tools
@@ -160,7 +160,7 @@ RUN /opt/venv/bin/playwright install --with-deps chromium \
 # records a stable path in AGENT_BROWSER_EXECUTABLE_PATH (see the ENV block).
 COPY scripts/install-agent-browser.sh /usr/local/bin/install-agent-browser.sh
 RUN chmod +x /usr/local/bin/install-agent-browser.sh \
- && su - ubuntu -c 'install-agent-browser.sh'
+ && /usr/local/bin/install-agent-browser.sh
 
 # ---------------------------------------------------------------------------
 # 8. Extra tools that are not packaged by Ubuntu (wpscan, enum4linux-ng)

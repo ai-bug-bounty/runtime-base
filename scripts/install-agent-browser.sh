@@ -11,10 +11,21 @@
 # `chrome-headless-shell` is the headless-only build Playwright itself drives
 # in headless mode. The full `chrome` binary shipped alongside it aborts at
 # startup in containerised/nested environments (crashpad handler failure).
+#
+# Runs as root during the image build: BuildKit runs build steps with
+# no-new-privileges, so `sudo` is unusable there. The npm cache is kept out of
+# the agent's home so it does not end up owned by root.
 set -euo pipefail
 
+AGENT_USER=ubuntu
+AGENT_BROWSER_BIN=/usr/local/lib/node_modules/agent-browser/bin
+CHROMIUM_LINK=/opt/agent-browser-chromium
+
 echo "==> installing agent-browser from npm"
-sudo npm install -g agent-browser
+npm install -g --cache /root/.npm agent-browser
+# The native binary is what actually runs; make sure the agent user can exec it.
+chmod -R a+rX /usr/local/lib/node_modules/agent-browser
+[ -d "${AGENT_BROWSER_BIN}" ] && chmod 0755 "${AGENT_BROWSER_BIN}"/agent-browser-* 2>/dev/null || true
 
 echo "==> locating a Chromium for agent-browser"
 chromium="$(find /opt/ms-playwright -type f \
@@ -25,7 +36,7 @@ if [ -z "${chromium}" ]; then
 fi
 [ -n "${chromium}" ] || { echo "no Chromium found under /opt/ms-playwright" >&2; exit 1; }
 
-sudo ln -sfn "${chromium}" /opt/agent-browser-chromium
-echo "==> agent-browser Chromium: /opt/agent-browser-chromium -> ${chromium}"
+ln -sfn "${chromium}" "${CHROMIUM_LINK}"
+echo "==> agent-browser Chromium: ${CHROMIUM_LINK} -> ${chromium}"
 
-agent-browser --version
+su - "${AGENT_USER}" -c 'agent-browser --version'
