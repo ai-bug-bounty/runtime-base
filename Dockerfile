@@ -35,6 +35,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     GOPATH=/home/ubuntu/go \
     GOFLAGS=-buildvcs=false \
     PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+    AGENT_BROWSER_EXECUTABLE_PATH=/opt/agent-browser-chromium \
+    AGENT_BROWSER_CA_CERT=/home/ubuntu/.mitmproxy/mitmproxy-ca-cert.pem \
+    NODE_EXTRA_CA_CERTS=/home/ubuntu/.mitmproxy/mitmproxy-ca-cert.pem \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
     PATH=/opt/venv/bin:/home/ubuntu/.local/bin:/home/ubuntu/go/bin:/usr/local/go/bin:/usr/local/bin:/opt/metasploit-framework/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/sbin:/usr/bin:/sbin:/bin
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -54,6 +60,8 @@ RUN echo "wireshark-common wireshark-common/install-setuid boolean false" | debc
       # networking / traffic / OSINT
       dnsutils whois traceroute iproute2 net-tools iputils-ping tcpdump tshark \
       proxychains4 openvpn tor sshpass libimage-exiftool-perl \
+      # browser trust store (certutil, used by Chromium and agent-browser)
+      libnss3-tools \
       # language runtimes
       python3 python3-pip python3-venv python3-dev pipx \
       ruby-full ruby-dev \
@@ -84,6 +92,12 @@ RUN echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ubuntu \
  && printf '%s\n' \
       'export PATH="/opt/venv/bin:$HOME/.local/bin:$HOME/go/bin:/usr/local/go/bin:/opt/metasploit-framework/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:$PATH"' \
       'export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright' \
+      'export AGENT_BROWSER_EXECUTABLE_PATH=/opt/agent-browser-chromium' \
+      'export AGENT_BROWSER_CA_CERT=$HOME/.mitmproxy/mitmproxy-ca-cert.pem' \
+      'export NODE_EXTRA_CA_CERTS=$HOME/.mitmproxy/mitmproxy-ca-cert.pem' \
+      'export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt' \
+      'export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt' \
+      'export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt' \
       'export GOROOT=/usr/local/go' \
       'export GOPATH=$HOME/go' \
       'export GOFLAGS=-buildvcs=false' \
@@ -121,6 +135,13 @@ COPY scripts/install-pipx-tools.sh /usr/local/bin/install-pipx-tools.sh
 RUN chmod +x /usr/local/bin/install-pipx-tools.sh \
  && su - ubuntu -c 'install-pipx-tools.sh'
 
+# mitmproxy creates its root CA on first use. Generate it at build time and
+# trust it system-wide and in the user's NSS database, so traffic can be
+# proxied through mitmproxy without TLS errors.
+COPY scripts/install-mitmproxy-ca.sh /usr/local/bin/install-mitmproxy-ca.sh
+RUN chmod +x /usr/local/bin/install-mitmproxy-ca.sh \
+ && su - ubuntu -c 'install-mitmproxy-ca.sh'
+
 # ---------------------------------------------------------------------------
 # 6. Go-based recon/web tools
 # ---------------------------------------------------------------------------
@@ -129,10 +150,17 @@ RUN chmod +x /usr/local/bin/install-go-tools.sh \
  && /usr/local/bin/install-go-tools.sh
 
 # ---------------------------------------------------------------------------
-# 7. Chromium for Playwright (browser-driven web testing)
+# 7. Chromium for Playwright (browser-driven web testing) + agent-browser
 # ---------------------------------------------------------------------------
 RUN /opt/venv/bin/playwright install --with-deps chromium \
  && chown -R ubuntu:ubuntu /opt/ms-playwright
+
+# agent-browser reuses the Chromium installed above instead of downloading its
+# own Chrome; the install script points it at the headless-shell build and
+# records a stable path in AGENT_BROWSER_EXECUTABLE_PATH (see the ENV block).
+COPY scripts/install-agent-browser.sh /usr/local/bin/install-agent-browser.sh
+RUN chmod +x /usr/local/bin/install-agent-browser.sh \
+ && su - ubuntu -c 'install-agent-browser.sh'
 
 # ---------------------------------------------------------------------------
 # 8. Extra tools that are not packaged by Ubuntu (wpscan, enum4linux-ng)

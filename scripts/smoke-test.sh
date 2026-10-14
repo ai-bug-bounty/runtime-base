@@ -22,6 +22,8 @@ docker run --rm --entrypoint bash "$image" -lc '
     python3 pip3 go node npm ruby gem brew docker git jq
     # python CLI tools
     mitmproxy wafw00f arjun dirsearch netexec theHarvester
+    # browser automation and the CA trust store tool
+    agent-browser certutil
   )
 
   missing=0
@@ -63,6 +65,27 @@ PY
     missing=1
   fi
   command -v msfconsole >/dev/null 2>&1 && echo "ok:   msfconsole" || echo "note: msfconsole not installed"
+
+  echo "--- mitmproxy CA ---"
+  ca="$HOME/.mitmproxy/mitmproxy-ca-cert.pem"
+  if [ -f "$ca" ]; then
+    echo "ok:   mitmproxy CA generated ($ca)"
+  else
+    echo "MISSING: mitmproxy CA ($ca)"
+    missing=1
+  fi
+  if [ -f /usr/local/share/ca-certificates/mitmproxy-ca.crt ]; then
+    echo "ok:   mitmproxy CA in the system trust store"
+  else
+    echo "MISSING: mitmproxy CA in the system trust store"
+    missing=1
+  fi
+  if certutil -d "sql:$HOME/.pki/nssdb" -L 2>/dev/null | grep -q mitmproxy; then
+    echo "ok:   mitmproxy CA in the NSS database"
+  else
+    echo "MISSING: mitmproxy CA in the NSS database"
+    missing=1
+  fi
 
   if [ "$missing" -ne 0 ] || [ "$lib_status" -ne 0 ]; then
     echo "SMOKE TEST FAILED"
