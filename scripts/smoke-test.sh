@@ -11,17 +11,17 @@ docker run --rm --entrypoint bash "$image" -lc '
   set -uo pipefail
 
   required=(
-    # recon / web
+    # recon / web (from kali-linux-headless unless noted)
     nmap masscan nikto sqlmap whatweb gobuster ffuf wfuzz dirb
-    nuclei httpx subfinder naabu dnsx katana tlsx gau dalfox waybackurls
-    kerbrute interactsh-client gowitness wpscan enum4linux-ng
-    testssl.sh jwt_tool commix
+    nuclei httpx subfinder naabu dnsx katana feroxbuster dalfox
+    gau waybackurls tlsx kerbrute interactsh-client gowitness
+    arjun dirsearch wpscan enum4linux-ng testssl.sh jwt_tool commix
     # credentials / network
     hydra medusa john hashcat smbclient sslscan tcpdump proxychains4
     # toolchains / platform
     python3 pip3 go node npm ruby gem brew docker git jq
-    # python CLI tools
-    mitmproxy wafw00f arjun dirsearch netexec theHarvester
+    # proxies and python CLI tools
+    mitmproxy wafw00f netexec theharvester
     # browser automation and the CA trust store tool
     agent-browser certutil
   )
@@ -43,7 +43,7 @@ import importlib
 mods = [
     "pydantic_ai", "requests", "httpx", "bs4", "lxml", "dns",
     "jwt", "Crypto", "paramiko", "nmap", "yaml", "scapy",
-    "impacket", "pwn", "ldap3", "pypykatz", "playwright",
+    "impacket", "ldap3", "pypykatz", "playwright",
 ]
 failed = []
 for mod in mods:
@@ -57,14 +57,49 @@ raise SystemExit(1 if failed else 0)
 PY
   lib_status=$?
 
-  echo "--- optional ---"
+  echo "--- nmap ---"
+  # Kali ships nmap with file capabilities, so it only runs when the container
+  # has NET_ADMIN (which --privileged implies). CI checks the privileged case
+  # separately; here we only report.
+  if nmap --version >/dev/null 2>&1; then
+    echo "ok:   nmap runs"
+  else
+    echo "note: nmap needs --privileged (this container is unprivileged)"
+  fi
+
+  echo "--- metasploit ---"
+  # Regression check for the llvm-21-dev build-tree symlinks that used to break
+  # bootsnap: msfconsole must actually start, not just exist. (Capture the output
+  # instead of piping to `grep -q`, which would SIGPIPE msfconsole and, under
+  # `pipefail`, look like a failure.)
+  if command -v msfconsole >/dev/null 2>&1; then
+    msf_out="$(timeout 300 msfconsole -q -x "version; exit" 2>&1 || true)"
+    case "$msf_out" in
+      *Framework:*) echo "ok:   msfconsole starts" ;;
+      *) echo "MISSING: msfconsole fails to start"; printf '%s\n' "$msf_out" | tail -3; missing=1 ;;
+    esac
+  else
+    echo "MISSING: msfconsole"
+    missing=1
+  fi
+
+  echo "--- docker compose ---"
   if docker compose version >/dev/null 2>&1; then
     echo "ok:   docker compose"
   else
     echo "MISSING: docker compose"
     missing=1
   fi
-  command -v msfconsole >/dev/null 2>&1 && echo "ok:   msfconsole" || echo "note: msfconsole not installed"
+
+  echo "--- wordlists ---"
+  for path in /usr/share/wordlists /usr/share/seclists /usr/share/wordlists/seclists; do
+    if [ -e "$path" ]; then
+      echo "ok:   $path"
+    else
+      echo "MISSING: $path"
+      missing=1
+    fi
+  done
 
   echo "--- mitmproxy CA ---"
   ca="$HOME/.mitmproxy/mitmproxy-ca-cert.pem"
@@ -80,12 +115,11 @@ PY
     echo "MISSING: mitmproxy CA in the system trust store"
     missing=1
   fi
-  if certutil -d "sql:$HOME/.pki/nssdb" -L 2>/dev/null | grep -q mitmproxy; then
-    echo "ok:   mitmproxy CA in the NSS database"
-  else
-    echo "MISSING: mitmproxy CA in the NSS database"
-    missing=1
-  fi
+  nss_list="$(certutil -d "sql:$HOME/.pki/nssdb" -L 2>/dev/null || true)"
+  case "$nss_list" in
+    *mitmproxy*) echo "ok:   mitmproxy CA in the NSS database" ;;
+    *) echo "MISSING: mitmproxy CA in the NSS database"; missing=1 ;;
+  esac
 
   if [ "$missing" -ne 0 ] || [ "$lib_status" -ne 0 ]; then
     echo "SMOKE TEST FAILED"

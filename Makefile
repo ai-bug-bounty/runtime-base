@@ -23,8 +23,8 @@ push: ## Push the image (IMAGE, TAG)
 pull: ## Pull the image (IMAGE, TAG)
 	docker pull $(IMAGE):$(TAG)
 
-shell: ## Interactive shell (privileged)
-	docker run --rm -it --privileged $(IMAGE):$(TAG) bash
+shell: ## Interactive shell (privileged, with a nested Docker daemon)
+	docker run --rm -it --privileged -v /var/lib/docker $(IMAGE):$(TAG) bash
 
 clean: ## Remove the local image (IMAGE, TAG)
 	-docker image rm $(IMAGE):$(TAG)

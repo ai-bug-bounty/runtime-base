@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Install Go-based recon and web testing tools into /usr/local/bin.
+# Go-based tools that Kali's repository does not package.
+#
+# Everything else the agent uses comes from apt: nuclei, subfinder, naabu,
+# dnsx, katana, feroxbuster, dalfox and gowitness are Kali packages, and
+# ProjectDiscovery's httpx is there as `httpx-toolkit` (symlinked to `httpx` in
+# the Dockerfile, because the plain name belongs to the Python HTTP client).
 set -euo pipefail
 
 export GOPATH=/root/go
@@ -8,19 +13,11 @@ export GOFLAGS=-buildvcs=false
 mkdir -p "$GOBIN" "$GOPATH"
 
 tools=(
-  github.com/projectdiscovery/nuclei/v3/cmd/nuclei
-  github.com/projectdiscovery/httpx/cmd/httpx
-  github.com/projectdiscovery/subfinder/v2/cmd/subfinder
-  github.com/projectdiscovery/naabu/v2/cmd/naabu
-  github.com/projectdiscovery/dnsx/cmd/dnsx
-  github.com/projectdiscovery/katana/cmd/katana
   github.com/projectdiscovery/tlsx/cmd/tlsx
   github.com/projectdiscovery/interactsh/cmd/interactsh-client
   github.com/lc/gau/v2/cmd/gau
-  github.com/hahwul/dalfox/v2
   github.com/tomnomnom/waybackurls
   github.com/ropnop/kerbrute
-  github.com/sensepost/gowitness
 )
 
 for tool in "${tools[@]}"; do

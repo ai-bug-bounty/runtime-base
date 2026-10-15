@@ -17,24 +17,43 @@ The image is public, so downstream projects do not need registry credentials.
 
 ## What is inside
 
-- Ubuntu 24.04, non-root `ubuntu` user with passwordless `sudo`.
-- `apt` **and** Homebrew, so the agent can install missing tools itself.
-- Docker-in-Docker (started by the entrypoint; requires `--privileged`).
-- Python venv at `/opt/venv` with `pydantic-ai` and common pentest libraries,
-  plus isolated pipx CLIs (mitmproxy, wafw00f, arjun, dirsearch, NetExec,
-  theHarvester).
-- Go toolchain and recon/web binaries (nuclei, httpx, subfinder, naabu, dnsx,
-  katana, tlsx, interactsh-client, gau, dalfox, waybackurls, kerbrute,
-  gowitness).
-- Node, Ruby (incl. wpscan), Java.
-- Playwright Chromium for browser-driven testing, plus **`agent-browser`**
-  (headless-Chromium automation CLI) wired to the same Chromium.
+- Kali Linux rolling plus **`kali-linux-headless`**: scanners and recon (`nmap`,
+  masscan, nikto, whatweb, wpscan, skipfish), web tooling (`sqlmap`, `commix`,
+  `ffuf`, `gobuster`, `wfuzz`, `dirb`, `arjun`, `dirsearch`, the ProjectDiscovery
+  suite), credentials and AD (`hydra`, `medusa`, `john`, `hashcat`, `netexec`,
+  `impacket`, `responder`, `evil-winrm`, `certipy`, `bloodhound`, `pypykatz`),
+  exploitation (`metasploit-framework`, `exploitdb`, `radare2`), MITM/proxy
+  tooling (`mitmproxy`, `proxychains4`), `wordlists`, `seclists` and more.
+- Non-root `ubuntu` user with passwordless `sudo`; `apt` **and** Homebrew, so
+  the agent can install anything missing itself.
+- Docker-in-Docker, **on by default** (`START_DOCKERD=1`). The container must be
+  started with `--privileged` and a `/var/lib/docker` volume — see *Run* below.
+- Python venv at `/opt/venv` with `pydantic-ai` and common pentest libraries
+  (`impacket`, `scapy`, `ldap3`, `certipy`, `pypykatz`, `playwright`, …).
+  (`pwntools` is not included: its `unicorn` dependency has no Python 3.14
+  wheel; install it in your own venv if you need it.)
+- Go toolchain plus the Go tools Kali does not package (`tlsx`,
+  `interactsh-client`, `gau`, `waybackurls`, `kerbrute`). ProjectDiscovery's
+  httpx is Kali's `httpx-toolkit`, symlinked to `httpx` (the plain name belongs
+  to the Python HTTP client).
+- Node, Ruby, Java toolchains; Playwright Chromium for browser-driven testing,
+  plus **`agent-browser`** (headless-Chromium automation CLI) wired to it.
 - **mitmproxy** with its **root CA pre-installed** — generated at build time and
   trusted in the system store (`/usr/local/share/ca-certificates`), the user's
   NSS database (`~/.pki/nssdb`) and via `AGENT_BROWSER_CA_CERT` /
   `NODE_EXTRA_CA_CERTS` / `SSL_CERT_FILE` — so traffic can be intercepted
   without TLS errors.
-- SecLists, PayloadsAllTheThings, testssl.sh, jwt_tool, commix.
+- PayloadsAllTheThings, jwt_tool, enum4linux-ng (the pieces Kali does not ship).
+
+Two deliberate build-time fixes worth knowing about:
+
+- `llvm-21-dev` (pulled in by clang via the metapackage) ships Debian's
+  recursive build-tree symlinks (`build/Release -> ..`), which make any naive
+  tree walk recurse until `ELOOP` and broke `msfconsole`. The Dockerfile removes
+  those two symlinks.
+- `nmap` ships with file capabilities and a wrapper that forces `--privileged`
+  for non-root users, so it only runs in a container that has `NET_ADMIN` —
+  which `--privileged` implies.
 
 ## Browser and proxy environment
 
@@ -58,23 +77,27 @@ make build
 docker build -t runtime-base .
 ```
 
-Metasploit is opt-in because it is large:
-
-```bash
-make build BUILD_ARGS="--build-arg INSTALL_METASPLOIT=true"
-```
+The build installs `kali-linux-headless` (~199 packages) and takes ~25–30
+minutes cold. Metasploit arrives with the metapackage; there is no opt-in flag
+any more.
 
 ## Run
 
+The entrypoint starts the nested Docker daemon and then runs the command, so
+give it `--privileged` **and** a `/var/lib/docker` volume:
+
 ```bash
 make shell    # interactive, privileged
+docker run --rm -it --privileged -v /var/lib/docker runtime-base bash
 ```
 
-The entrypoint starts an internal Docker daemon and then runs the command:
+Both flags are required: `--privileged` because a daemon needs host-level
+capabilities (the capability set alone is not enough — cgroups and overlayfs
+refuse), and the volume so the nested daemon's overlayfs does not stack on the
+container's own writable layer (without it `dockerd` starts but no container can
+run). `--rm` removes the anonymous volume with the container.
 
-```bash
-docker run --rm -it --privileged runtime-base bash
-```
+Set `START_DOCKERD=0` to skip the daemon (e.g. when running unprivileged).
 
 ## Test
 

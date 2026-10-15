@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
-# Wordlists, payload collections and small helper scripts.
+# Payload collections and helper scripts that Kali does not ship.
+#
+# Kali's `wordlists` and `seclists` packages (part of kali-linux-headless) cover
+# the wordlists, and testssl.sh/commix/jwt_tool-adjacent tools come from apt, so
+# this only fetches what is genuinely missing.
 set -euo pipefail
 
-mkdir -p /opt/wordlists /opt/payloads /usr/share/wordlists
+mkdir -p /opt/payloads /usr/share/wordlists
 
-echo "==> SecLists (sparse checkout of the most useful directories)"
-if [ ! -d /opt/wordlists/SecLists/.git ]; then
-  git clone --depth 1 --filter=blob:none --sparse \
-    https://github.com/danielmiessler/SecLists.git /opt/wordlists/SecLists
-  git -C /opt/wordlists/SecLists sparse-checkout set \
-    Discovery/Web-Content \
-    Discovery/DNS \
-    Discovery/Infrastructure \
-    Passwords \
-    Usernames \
-    Fuzzing
+echo "==> SecLists lives in /usr/share/seclists (Kali package); link the old path"
+if [ -d /usr/share/seclists ]; then
+  ln -sfn /usr/share/seclists /usr/share/wordlists/seclists
 fi
-ln -sfn /opt/wordlists/SecLists /usr/share/wordlists/seclists
+
+echo "==> rockyou (Kali ships it gzipped; leave it as-is, tools read .gz)"
+ls /usr/share/wordlists/rockyou.txt* 2>/dev/null || echo "note: no rockyou in /usr/share/wordlists"
 
 echo "==> PayloadsAllTheThings"
 if [ ! -d /opt/payloads/PayloadsAllTheThings/.git ]; then
@@ -25,22 +23,10 @@ if [ ! -d /opt/payloads/PayloadsAllTheThings/.git ]; then
     /opt/payloads/PayloadsAllTheThings
 fi
 
-echo "==> testssl.sh"
-if [ ! -d /opt/testssl.sh/.git ]; then
-  git clone --depth 1 https://github.com/drwetter/testssl.sh.git /opt/testssl.sh
-fi
-ln -sfn /opt/testssl.sh/testssl.sh /usr/local/bin/testssl.sh
-
 echo "==> jwt_tool"
 if [ ! -d /opt/jwt_tool/.git ]; then
   git clone --depth 1 https://github.com/ticarpi/jwt_tool.git /opt/jwt_tool
 fi
 ln -sfn /opt/jwt_tool/jwt_tool.py /usr/local/bin/jwt_tool
 
-echo "==> commix"
-if [ ! -d /opt/commix/.git ]; then
-  git clone --depth 1 https://github.com/commixproject/commix.git /opt/commix
-fi
-ln -sfn /opt/commix/commix.py /usr/local/bin/commix
-
-chmod -R a+rX /opt/wordlists /opt/payloads /opt/testssl.sh /opt/jwt_tool /opt/commix
+chmod -R a+rX /opt/payloads /opt/jwt_tool
