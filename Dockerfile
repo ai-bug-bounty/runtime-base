@@ -85,7 +85,10 @@ RUN apt-get update \
       # httpx-toolkit, to keep the name clear of the Python HTTP client),
       # plus a few others
       nuclei subfinder httpx-toolkit naabu dnsx katana feroxbuster dalfox \
-      gowitness testssl.sh seclists arjun dirsearch medusa \
+      gowitness testssl.sh arjun dirsearch medusa \
+      # `wordlists` (rockyou, plus the dirb/john lists) is a metapackage
+      # dependency; SecLists is *not* installed here — its 1.8 GB is trimmed to
+      # the ~15 files that matter in scripts/install-wordlists.sh.
  && rm -f /usr/lib/llvm-21/build/Release /usr/lib/llvm-21/build/Debug+Asserts \
  && ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime \
  && echo "${TZ}" > /etc/timezone \
@@ -139,20 +142,22 @@ RUN chmod +x /usr/local/bin/install-go.sh \
 # ---------------------------------------------------------------------------
 # 4. Python environment for the agents and pentest libraries (/opt/venv)
 # ---------------------------------------------------------------------------
-RUN python3 -m venv /opt/venv \
- && /opt/venv/bin/pip install --upgrade pip setuptools wheel
-
+# One step, not three. When `chown -R` ran in its own layer it rewrote every file
+# of the venv into another layer, so the image carried the venv twice (+576 MB of
+# accounting, no extra content). The chown has to happen in the layer that
+# created the files.
 RUN --mount=type=cache,target=/home/ubuntu/.cache/pip \
-    /opt/venv/bin/pip install \
+    python3 -m venv /opt/venv \
+ && /opt/venv/bin/pip install --upgrade pip setuptools wheel \
+ && /opt/venv/bin/pip install \
       "pydantic-ai" \
       "requests" "httpx[http2]" "beautifulsoup4" "lxml" "html5lib" \
       "dnspython" "pyjwt" "pycryptodome" "paramiko" "python-nmap" \
       # no pwntools: its `unicorn` dependency has no Python 3.14 wheel
       "shodan" "censys" "scapy" "impacket" \
       "ldap3" "ldapdomaindump" "certipy-ad" "bloodhound" "pypykatz" \
-      "pyyaml" "rich" "typer" "tenacity" "playwright"
-
-RUN chown -R ubuntu:ubuntu /opt/venv \
+      "pyyaml" "rich" "typer" "tenacity" "playwright" \
+ && chown -R ubuntu:ubuntu /opt/venv \
  # `httpx` must be ProjectDiscovery's (Kali packages it as httpx-toolkit and we
  # symlink it): the Python library's console script would shadow it, because
  # /opt/venv/bin comes first on PATH.

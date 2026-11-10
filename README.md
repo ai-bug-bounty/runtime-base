@@ -23,7 +23,12 @@ The image is public, so downstream projects do not need registry credentials.
   suite), credentials and AD (`hydra`, `medusa`, `john`, `hashcat`, `netexec`,
   `impacket`, `responder`, `evil-winrm`, `certipy`, `bloodhound`, `pypykatz`),
   exploitation (`metasploit-framework`, `exploitdb`, `radare2`), MITM/proxy
-  tooling (`mitmproxy`, `proxychains4`), `wordlists`, `seclists` and more.
+  tooling (`mitmproxy`, `proxychains4`), `wordlists` and more.
+- **A curated slice of SecLists** rather than the `seclists` package: 15 files
+  (directory/file discovery, API endpoints, parameter names, one DNS list, a
+  common-password list, LFI and command-injection payloads) — 5 MB instead of
+  1.8 GB, under SecLists' own paths. `apt install seclists` still works when a
+  task wants the rest.
 - Non-root `ubuntu` user with passwordless `sudo`; `apt` **and** Homebrew, so
   the agent can install anything missing itself.
 - Docker-in-Docker, **on by default** (`START_DOCKERD=1`). The container must be
@@ -107,3 +112,12 @@ make test     # or: ./scripts/smoke-test.sh runtime-base:local
 
 The GitHub Actions workflow builds, pushes, smoke-tests and verifies
 Docker-in-Docker. Because this repository is public, Actions minutes are free.
+
+## Image size
+
+Measured on revision `c7f7607` (before the trim): 5.75 GB compressed to pull,
+15.5 GB of content once extracted — 76 % of it apt packages, with `seclists`
+(1.8 GB) the single biggest item. The analysis, per-package tables and the
+options that were considered live in
+[`docs/experiments/2026-11-10-agent-image-size`](../docs/experiments/2026-11-10-agent-image-size/README.md)
+of the parent repository.
