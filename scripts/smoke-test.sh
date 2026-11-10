@@ -100,6 +100,19 @@ PY
       missing=1
     fi
   done
+  # SecLists is a curated slice (install-wordlists.sh), not the whole package:
+  # make sure the downloads landed where tools look for them
+  for list in \
+    Discovery/Web-Content/raft-medium-directories.txt \
+    Discovery/Web-Content/api/objects.txt \
+    Discovery/DNS/subdomains-top1million-5000.txt; do
+    if [ -s "/usr/share/seclists/$list" ]; then
+      echo "ok:   seclists/$list ($(wc -l < "/usr/share/seclists/$list") lines)"
+    else
+      echo "MISSING: seclists/$list"
+      missing=1
+    fi
+  done
 
   echo "--- mitmproxy CA ---"
   ca="$HOME/.mitmproxy/mitmproxy-ca-cert.pem"
