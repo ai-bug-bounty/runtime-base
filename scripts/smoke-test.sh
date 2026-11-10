@@ -83,6 +83,19 @@ PY
     missing=1
   fi
 
+  echo "--- jwt_tool ---"
+  # It was on PATH but crashed on a missing `ratelimit` import: run it.
+  if command -v jwt_tool >/dev/null 2>&1; then
+    jwt_out="$(timeout 60 jwt_tool --help 2>&1 || true)"
+    case "$jwt_out" in
+      *jwt_tool*) echo "ok:   jwt_tool runs" ;;
+      *) echo "MISSING: jwt_tool fails to run"; printf '%s\n' "$jwt_out" | tail -3; missing=1 ;;
+    esac
+  else
+    echo "MISSING: jwt_tool"
+    missing=1
+  fi
+
   echo "--- docker compose ---"
   if docker compose version >/dev/null 2>&1; then
     echo "ok:   docker compose"

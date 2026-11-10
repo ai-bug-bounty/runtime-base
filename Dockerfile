@@ -157,6 +157,8 @@ RUN --mount=type=cache,target=/home/ubuntu/.cache/pip \
       "shodan" "censys" "scapy" "impacket" \
       "ldap3" "ldapdomaindump" "certipy-ad" "bloodhound" "pypykatz" \
       "pyyaml" "rich" "typer" "tenacity" "playwright" \
+      # jwt_tool (installed from git below) imports these at startup
+      "ratelimit" "pycryptodomex" "termcolor" \
  && chown -R ubuntu:ubuntu /opt/venv \
  # `httpx` must be ProjectDiscovery's (Kali packages it as httpx-toolkit and we
  # symlink it): the Python library's console script would shadow it, because

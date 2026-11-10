@@ -71,8 +71,10 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
+          # nothing is published until the smoke test and the DinD test pass:
+          # a broken image must not land on :main (the agent image inherits it)
+          push: false
+          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -83,6 +85,11 @@ jobs:
           set -euo pipefail
           tag="$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | head -n1)"
           ./scripts/smoke-test.sh "$tag"
+
+      - name: Push
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "${{ steps.meta.outputs.tags }}" | xargs -n1 docker push
 
       - name: Test Docker-in-Docker
         run: |

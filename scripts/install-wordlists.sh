@@ -61,11 +61,28 @@ ln -sfn "${SECLISTS_ROOT}" /usr/share/wordlists/seclists
 echo "==> rockyou (Kali ships it gzipped; tools read .gz)"
 ls /usr/share/wordlists/rockyou.txt* 2>/dev/null || echo "note: no rockyou in /usr/share/wordlists"
 
+# Payload collections and helper scripts Kali does not ship. (The git histories
+# are dropped: they are re-cloneable and only add weight to the image.)
 echo "==> PayloadsAllTheThings"
-if [ ! -d /opt/payloads/PayloadsAllTheThings/.git ]; then
+if [ ! -d /opt/payloads/PayloadsAllTheThings ]; then
   git clone --depth 1 \
     https://github.com/swisskyrepo/PayloadsAllTheThings.git \
     /opt/payloads/PayloadsAllTheThings
 fi
 rm -rf /opt/payloads/PayloadsAllTheThings/.git
-du -sh /opt/payloads/PayloadsAllTheThings
+
+echo "==> jwt_tool"
+if [ ! -d /opt/jwt_tool ]; then
+  git clone --depth 1 https://github.com/ticarpi/jwt_tool.git /opt/jwt_tool
+fi
+rm -rf /opt/jwt_tool/.git
+# Its shebang says `python3` (the distro one); run it from /opt/venv instead,
+# which has the `ratelimit`/`pycryptodomex`/`termcolor` it imports.
+cat > /usr/local/bin/jwt_tool <<'WRAPPER'
+#!/bin/sh
+exec /opt/venv/bin/python /opt/jwt_tool/jwt_tool.py "$@"
+WRAPPER
+chmod 0755 /usr/local/bin/jwt_tool
+
+chmod -R a+rX /opt/payloads /opt/jwt_tool
+du -sh /opt/payloads/PayloadsAllTheThings /opt/jwt_tool
